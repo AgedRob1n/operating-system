@@ -32,17 +32,6 @@ send_ln:
   ret
 
 extern send_str
-; send_str:
-;   .loop:
-;     lodsb
-;     or al, al
-;     jz .end
-;     call send_char
-;     jmp .loop
-;     
-;   .end:
-;     ret
-; Assumes Error is inside the AL Register
 
 read_disk:
   mov ah, 0
@@ -63,7 +52,6 @@ read_disk:
   call send_str
   ret
 
-
 _start:
   call clear_screen
   call establish_serial_port
@@ -79,4 +67,5 @@ file_err          db "Couldn't Open Disk.",      0
 file_success      db "Successfully Opened Disk", 0
 disk              db 0x80
 stage_two_sectors db 0x08
+
 

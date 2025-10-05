@@ -18,6 +18,8 @@ SECTIONS {
     stage_two.o(.data)
     comm_funcs.o(.text)
     comm_funcs.o(.data)
+    a20_funcs.o(.text)
+    a20_funcs.o(.data)
   }
 }
 

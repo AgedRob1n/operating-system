@@ -1,6 +1,5 @@
 bits 16
 
-
 section .text
 
 global increment_cursor_pos
