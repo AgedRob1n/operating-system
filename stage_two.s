@@ -1,53 +1,27 @@
 bits 16
 
-section .data
-success_msg           db  "Succesfully Entered Second Stage", 0
-unsupported_str       db  "Unsupported Function Call",        0
-mem_start_str         db  "Probing Memory...",                0
-mem_fin_str           db  "Memory Probing Finished.",         0
-misc_err              db  "Misc. Error",                      0
-long_mode_str         db  "Entering Long Mode...",            0
-protected_mode_str    db  "Entering Protected Mode...",       0
-det_long_mode         db  "Detecting Long Mode Support...",   0
-det_cpuid             db  "Detecting CPUID Support...",       0
-cpuid_supported       db  "CPUID Supported.",                 0
-cpuid_unsupported     db  "CPUID Not Supported.",             0
-long_mode_supported   db  "Long Mode Supported.",             0
-long_mode_unsupported db  "Long Mode Unsupported.",           0
-long_mode_success_str db  "Succesfully Entered Long Mode.",   0
-extended_unsupported  db  "Extended Mode is Unsupported.",    0
-extended_supported    db  "Extended Mode is Supported.",      0
-creating_gdt_str      db  "Creating GDT...",                  0
-db 0 ; without this line the next string doesn't work
-gdt_success_str       db  "GDT succesfully created.",         0
-
-mem_entry_num         db  0x00
-mem_map_addr          dw  0x8000
-cpuid_test_bit        dd  1 << 21
-long_test_bit         dd  1 << 31
-disk                  equ  0x00
-sector_count          equ  0x00
-
 section .text
 extern send_str
+extern serial_send_str
+extern enable_a20_bios
 
 stage_two:
   push success_msg
   call send_str
   
-  call detect_memory
+  ; call detect_memory when implemented
   
   push det_long_mode
   call send_str
+  call check_long_mode_support
   
   push long_mode_str
   call send_str
 
   push det_cpuid
   call send_str
-
   call check_cpuid_support
-  call check_long_mode_support
+
   call enter_protected_mode
 
   jmp $
@@ -102,21 +76,28 @@ check_extended_support:
     jmp $
 
 enter_protected_mode:
+  call enable_a20_bios
+
   push protected_mode_str
   call send_str
   push creating_gdt_str
   call send_str
-  cli
   call create_gdt
   push gdt_success_str
   call send_str
+  cmp ax, 1
+  je .hang
 
   mov eax, cr0
-  or al, 1
+  or eax, 1
   mov cr0, eax
   jmp 0x08:protected_mode
+  jmp $
 
   ret
+
+  .hang:
+    jmp $
 
 
 gdt:
@@ -126,106 +107,65 @@ gdt:
     dw 0xFFFF
     dw 0x0000
     db 0x00
-    db 0b10011011
-    db 0b11001111
+    db 0x9B
+    db 0xCF
+    db 0x00
   .data:
     dw 0xFFFF
     dw 0x0000
     db 0x00
-    db 0b10010011
-    db 0b11001111
+    db 0x92 ; 10010010
+    db 0xCF
+    db 0x00
   .end:
 
-check_a20_line:
-  pushf
-  push es
-  push ds
-  push di
-  push si
-  xor ax, ax
-  mov es, ax
-  not ax
-  mov ds, ax
+gdt_description:
+  dw gdt.end - gdt
+  dd gdt
 
 create_gdt:
-  gdtr dw 0
-       dd 0
-  mov ax,  [esp+4]
-  mov [gdtr], ax
-  mov eax, [esp+8]
-  add eax, [esp+12]
-  mov [gdtr + 2], eax
-  lgdt [gdtr]
+  cli
+  xor ax, ax
+  mov ds, ax
+  lgdt [gdt_description]
   ret
-
-detect_memory:
-  xor ebx, ebx
-  xor bp, bp
-
-  mov di, [mem_map_addr]
-  add di, 4
-
-  mov eax, 0xE820
-  mov edx, 0x0534D4150
-
-  mov byte [es:di + 20], 0x01
-  mov ecx, 24
-  int 0x15
-
-  jc .unsupported_call
-  mov edx, 0x0534D4150
-  cmp eax, edx
-  jne .misc_err
-  test ebx, ebx
-  je .misc_err
-  jmp .success
-
-  .unsupported_call:
-    push unsupported_str
-    call send_str
-    stc
-    ret
-  .misc_err:
-    push misc_err
-    call send_str
-    stc
-    ret
-
-  .success:
-    push mem_start_str
-    call send_str
-    jcxz .test
-    cmp cl, 20
-    jbe .no_text
-    test byte [es:di + 20], 0x01
-    ret
-
-  .loop:
-    mov eax, 0xE820
-    mov [es:di + 20], dword 0x01
-    mov ecx, 24
-    int 0x15
-    jmp .finish
-    mov edx, 0x0534D4150
-  .no_text:
-    mov ecx, [es:di + 8]
-    mov ecx, [es:di + 12]
-    jz .test
-    inc bp
-    add di, 24
-
-  .test:
-    test ebx, ebx ; If EBX == 0  leave loop
-    jne .loop
-  .finish:
-    mov [es:mem_map_addr], bp
-    clc
-    push mem_fin_str
-    call send_str
-    ret
-
 
 bits 32
 protected_mode:
-  jmp protected_mode
+  jmp $
+  mov ax, 0x08
+  mov ds, ax
+  mov ss, ax
+  mov esp, 0x090000
   ret
+
+
+section .data
+success_msg           db  "Succesfully Entered Second Stage", 0
+unsupported_str       db  "Unsupported Function Call",        0
+mem_start_str         db  "Probing Memory...",                0
+mem_fin_str           db  "Memory Probing Finished.",         0
+misc_err              db  "Misc. Error",                      0
+long_mode_str         db  "Entering Long Mode...",            0
+protected_mode_str    db  "Entering Protected Mode...",       0
+det_long_mode         db  "Detecting Long Mode Support...",   0
+det_cpuid             db  "Detecting CPUID Support...",       0
+cpuid_supported       db  "CPUID Supported.",                 0
+cpuid_unsupported     db  "CPUID Not Supported.",             0
+long_mode_supported   db  "Long Mode Supported.",             0
+long_mode_unsupported db  "Long Mode Unsupported.",           0
+long_mode_success_str db  "Succesfully Entered Long Mode.",   0
+extended_unsupported  db  "Extended Mode is Unsupported.",    0
+extended_supported    db  "Extended Mode is Supported.",      0
+creating_gdt_str      db  "Creating GDT...",                  0
+db 0
+gdt_success_str       db  "GDT succesfully created.",         0
+
+mem_entry_num         db  0x00
+mem_map_addr          dw  0x8000
+cpuid_test_bit        dd  1 << 21
+long_test_bit         dd  1 << 31
+disk                  equ  0x00
+sector_count          equ  0x00
+
+
