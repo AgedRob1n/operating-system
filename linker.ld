@@ -18,8 +18,10 @@ SECTIONS {
     stage_two.o(.data)
     comm_funcs.o(.text)
     comm_funcs.o(.data)
-    a20_funcs.o(.text)
-    a20_funcs.o(.data)
+    cpu_lines.o(.text)
+    cpu_lines.o(.data)
+    protected_mode.o(.text)
+    protected_mode.o(.data)
   }
 }
 

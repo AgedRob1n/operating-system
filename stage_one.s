@@ -2,6 +2,8 @@
 section .text
 bits 16
 
+extern clear_screen
+
 jmp _start
 
 clear_screen:
